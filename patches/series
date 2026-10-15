@@ -324,6 +324,7 @@ helium/ui/status-bubble.patch
 helium/ui/clean-incognito-guest-ntp.patch
 helium/ui/enable-fluent-scrollbar.patch
 helium/ui/helium-color-scheme.patch
+helium/ui/zenkai-clay-theme.patch
 helium/ui/improve-flags-webui.patch
 helium/ui/ublock-show-in-settings.patch
 helium/ui/licenses-in-credits.patch
