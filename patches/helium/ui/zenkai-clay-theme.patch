@@ -1,0 +1,422 @@
+--- a/chrome/browser/ui/color/BUILD.gn
++++ b/chrome/browser/ui/color/BUILD.gn
+@@ -8,10 +8,14 @@
+ assert(!is_ios, "Chromium/iOS shouldn't use anything in //chrome")
+ 
+ source_set("color_headers") {
+-  sources = [ "chrome_color_id.h" ]
++  sources = [
++    "chrome_color_id.h",
++    "zenkai_clay_theme.h",
++  ]
+ 
+   public_deps = [
+     "//components/color:color_headers",
++    "//skia",
+     "//ui/color:color_headers",
+   ]
+ }
+@@ -45,6 +49,7 @@
+     "tab_group_color_ids.h",
+     "tab_strip_color_mixer.cc",
+     "tab_strip_color_mixer.h",
++    "zenkai_clay_color_mixer.cc",
+   ]
+ 
+   configs += [ "//build/config/compiler:wexit_time_destructors" ]
+@@ -101,6 +106,7 @@
+       "material_new_tab_page_color_mixer_unittest.cc",
+       "material_tab_strip_color_mixer_unittest.cc",
+       "new_tab_page_color_mixer_unittest.cc",
++      "zenkai_clay_color_mixer_unittest.cc",
+     ]
+ 
+     deps = [
+--- a/chrome/browser/ui/color/chrome_color_mixers.cc
++++ b/chrome/browser/ui/color/chrome_color_mixers.cc
+@@ -23,6 +23,7 @@
+ #include "chrome/browser/ui/color/omnibox_color_mixer.h"
+ #include "chrome/browser/ui/color/product_specifications_color_mixer.h"
+ #include "chrome/browser/ui/color/tab_strip_color_mixer.h"
++#include "chrome/browser/ui/color/zenkai_clay_theme.h"
+ #include "ui/color/color_provider_utils.h"
+ 
+ namespace {
+@@ -85,8 +86,9 @@
+   AddMaterialSidePanelColorMixer(provider, key);
+   AddMaterialTabStripColorMixer(provider, key);
+ 
+-  // Must be the last one in order to override other mixer colors.
++  // Apply platform defaults before preset and extension theme overrides.
+   AddNativeChromeColorMixer(provider, key);
++  zenkai_clay::AddColorMixer(provider, key);
+ 
+   if (key.custom_theme) {
+     key.custom_theme->AddColorMixers(provider, key);
+--- /dev/null
++++ b/chrome/browser/ui/color/zenkai_clay_color_mixer.cc
+@@ -0,0 +1,115 @@
++// Copyright 2026 The Helium Authors
++// You can use, redistribute, and/or modify this source code under
++// the terms of the GPL-3.0 license that can be found in the LICENSE file.
++
++#include "chrome/browser/ui/color/zenkai_clay_theme.h"
++
++#include <utility>
++
++#include "chrome/browser/ui/color/chrome_color_id.h"
++#include "ui/color/color_mixer.h"
++#include "ui/color/color_provider.h"
++#include "ui/color/color_provider_key.h"
++
++namespace zenkai_clay {
++
++void AddColorMixer(ui::ColorProvider* provider,
++                   const ui::ColorProviderKey& key) {
++  // A neutral variant distinguishes the preset from a custom clay accent.
++  // Leave light mode, extension/app themes and accessibility colors intact.
++  if (key.user_color != kAccent ||
++      key.scheme_variant != ui::ColorProviderKey::SchemeVariant::kNeutral ||
++      key.color_mode != ui::ColorProviderKey::ColorMode::kDark ||
++      key.contrast_mode != ui::ColorProviderKey::ContrastMode::kNormal ||
++      key.forced_colors != ui::ColorProviderKey::ForcedColors::kNone ||
++      key.custom_theme || key.app_controller) {
++    return;
++  }
++
++  // Keep the surfaces neutral instead of tinting them with the seed color.
++  // The same key is used by regular and incognito windows.
++  constexpr std::pair<ui::ColorId, SkColor> kColors[] = {
++      {ui::kColorFrameActive, kFrame},
++      {ui::kColorFrameInactive, kFrame},
++      {ui::kColorSysBase, kFrame},
++      {ui::kColorSysHeader, kFrame},
++      {ui::kColorSysHeaderInactive, kFrame},
++      {ui::kColorSysSurface, kFrame},
++      {ui::kColorSysSurface1, kToolbar},
++      {ui::kColorSysSurface2, kToolbar},
++      {ui::kColorSysSurface3, kOmnibox},
++      {ui::kColorSysSurface4, kOmnibox},
++      {ui::kColorSysSurface5, kOmnibox},
++      {ui::kColorSysBaseContainer, kToolbar},
++      {ui::kColorSysBaseContainerElevated, kOmnibox},
++      {ui::kColorSysNeutralContainer, kToolbar},
++      {ui::kColorSysSurfaceVariant, kOmnibox},
++      {ui::kColorSysDivider, kOmnibox},
++      {ui::kColorSysOnSurface, kText},
++      {ui::kColorSysOnSurfacePrimary, kText},
++      {ui::kColorSysOnSurfaceSecondary, kSecondaryText},
++      {ui::kColorSysOnSurfaceSubtle, kInactiveText},
++      {ui::kColorSysOnSurfaceVariant, kSecondaryText},
++      {ui::kColorSysPrimary, kAccent},
++      {ui::kColorSysOnPrimary, kFrame},
++      {ui::kColorSysPrimaryContainer, kSelection},
++      {ui::kColorSysOnPrimaryContainer, kText},
++      {ui::kColorSysSecondaryContainer, kSelection},
++      {ui::kColorSysOnSecondaryContainer, kText},
++      {ui::kColorSysTonalContainer, kSelection},
++      {ui::kColorSysOnTonalContainer, kText},
++      {ui::kColorSysStateFocusRing, kAccent},
++      {ui::kColorSysStateTextHighlight, kAccent},
++      {ui::kColorSysStateOnTextHighlight, kFrame},
++      {ui::kColorButtonBackgroundProminent, kAccent},
++      {ui::kColorButtonBackgroundProminentFocused, kAccent},
++      {ui::kColorButtonForegroundProminent, kFrame},
++      {ui::kColorTextfieldSelectionBackground, kAccent},
++      {ui::kColorTextfieldSelectionForeground, kFrame},
++      {kColorToolbar, kToolbar},
++      {kColorToolbarText, kText},
++      {kColorToolbarTextDefault, kText},
++      {kColorToolbarButtonText, kText},
++      {kColorToolbarButtonIcon, kInactiveText},
++      {kColorToolbarButtonIconHovered, kText},
++      {kColorToolbarButtonIconPressed, kText},
++      {kColorToolbarContentAreaSeparator, kOmnibox},
++      {kColorToolbarContentAreaSeparatorSolid, kOmnibox},
++      {kColorBookmarkBarBackground, kToolbar},
++      {kColorBookmarkBarForeground, kText},
++      {kColorLocationBarBackground, kOmnibox},
++      {kColorLocationBarBackgroundHovered, kOmnibox},
++      {kColorOmniboxResultsBackground, kOmnibox},
++      {kColorOmniboxResultsBackgroundHovered, kToolbar},
++      {kColorOmniboxResultsBackgroundSelected, kSelection},
++      {kColorOmniboxText, kText},
++      {kColorOmniboxTextDimmed, kInactiveText},
++      {kColorOmniboxResultsTextSelected, kText},
++      {kColorTabBackgroundActiveFrameActive, kToolbar},
++      {kColorTabBackgroundActiveFrameInactive, kToolbar},
++      {kColorTabBackgroundInactiveFrameActive, kFrame},
++      {kColorTabBackgroundInactiveFrameInactive, kFrame},
++      {kColorTabBackgroundInactiveHoverFrameActive, kOmnibox},
++      {kColorTabBackgroundInactiveHoverFrameInactive, kOmnibox},
++      {kColorTabBackgroundSelectedFrameActive, kSelection},
++      {kColorTabBackgroundSelectedFrameInactive, kSelection},
++      {kColorTabBackgroundSelectedHoverFrameActive, kSelection},
++      {kColorTabBackgroundSelectedHoverFrameInactive, kSelection},
++      {kColorTabForegroundActiveFrameActive, kText},
++      {kColorTabForegroundActiveFrameInactive, kText},
++      {kColorTabForegroundInactiveFrameActive, kSecondaryText},
++      {kColorTabForegroundInactiveFrameInactive, kInactiveText},
++      {kColorNewTabPageBackground, kBackground},
++      {kColorNewTabPageBackgroundOverride, kBackground},
++      {kColorNewTabPageHeader, kFrame},
++      {kColorNewTabPageText, kText},
++      {kColorNewTabPageLink, kAccent},
++      {kColorNewTabPageFocusRing, kAccent},
++  };
++  ui::ColorMixer& mixer = provider->AddMixer();
++  for (const auto& [id, color] : kColors) {
++    mixer[id] = {color};
++  }
++}
++
++}  // namespace zenkai_clay
+--- /dev/null
++++ b/chrome/browser/ui/color/zenkai_clay_color_mixer_unittest.cc
+@@ -0,0 +1,86 @@
++// Copyright 2026 The Helium Authors
++// You can use, redistribute, and/or modify this source code under
++// the terms of the GPL-3.0 license that can be found in the LICENSE file.
++
++#include "chrome/browser/ui/color/zenkai_clay_theme.h"
++
++#include "chrome/browser/ui/color/chrome_color_id.h"
++#include "testing/gtest/include/gtest/gtest.h"
++#include "ui/color/color_mixer.h"
++#include "ui/color/color_provider.h"
++#include "ui/color/color_provider_key.h"
++#include "ui/gfx/color_utils.h"
++
++namespace zenkai_clay {
++namespace {
++
++ui::ColorProviderKey PresetKey() {
++  ui::ColorProviderKey key;
++  key.user_color = kAccent;
++  key.scheme_variant = ui::ColorProviderKey::SchemeVariant::kNeutral;
++  key.color_mode = ui::ColorProviderKey::ColorMode::kDark;
++  return key;
++}
++
++TEST(ZenkaiClayColorMixerTest, MatchesSuppliedDarkSurfaces) {
++  ui::ColorProvider provider;
++  AddColorMixer(&provider, PresetKey());
++  EXPECT_EQ(kFrame, provider.GetColor(ui::kColorFrameActive));
++  EXPECT_EQ(kFrame, provider.GetColor(ui::kColorFrameInactive));
++  EXPECT_EQ(kToolbar, provider.GetColor(kColorToolbar));
++  EXPECT_EQ(kOmnibox, provider.GetColor(kColorLocationBarBackground));
++  EXPECT_EQ(kText, provider.GetColor(kColorOmniboxText));
++  EXPECT_EQ(kBackground, provider.GetColor(kColorNewTabPageBackground));
++  EXPECT_EQ(kText, provider.GetColor(kColorBookmarkBarForeground));
++  EXPECT_EQ(kSecondaryText,
++            provider.GetColor(kColorTabForegroundInactiveFrameActive));
++  EXPECT_EQ(kInactiveText,
++            provider.GetColor(kColorTabForegroundInactiveFrameInactive));
++  EXPECT_EQ(kAccent, provider.GetColor(ui::kColorSysStateFocusRing));
++}
++
++TEST(ZenkaiClayColorMixerTest, TextAndAccentHaveAccessibleContrast) {
++  EXPECT_GE(color_utils::GetContrastRatio(kText, kOmnibox), 4.5f);
++  EXPECT_GE(color_utils::GetContrastRatio(kInactiveText, kToolbar), 4.5f);
++  EXPECT_GE(color_utils::GetContrastRatio(kAccent, kBackground), 4.5f);
++  EXPECT_GE(color_utils::GetContrastRatio(kFrame, kAccent), 4.5f);
++}
++
++TEST(ZenkaiClayColorMixerTest, IncognitoKeepsThePalette) {
++  auto key = PresetKey();
++  key.user_color_source = ui::ColorProviderKey::UserColorSource::kGrayscale;
++  ui::ColorProvider provider;
++  AddColorMixer(&provider, key);
++  EXPECT_EQ(kFrame, provider.GetColor(ui::kColorFrameActive));
++  EXPECT_EQ(kToolbar, provider.GetColor(kColorToolbar));
++}
++
++TEST(ZenkaiClayColorMixerTest, OtherModesAndAccessibilityKeepTheirColors) {
++  for (int scenario = 0; scenario < 5; ++scenario) {
++    auto key = PresetKey();
++    switch (scenario) {
++      case 0:
++        key.user_color = SK_ColorBLUE;
++        break;
++      case 1:
++        key.scheme_variant = ui::ColorProviderKey::SchemeVariant::kTonalSpot;
++        break;
++      case 2:
++        key.color_mode = ui::ColorProviderKey::ColorMode::kLight;
++        break;
++      case 3:
++        key.contrast_mode = ui::ColorProviderKey::ContrastMode::kHigh;
++        break;
++      case 4:
++        key.forced_colors = ui::ColorProviderKey::ForcedColors::kSystem;
++        break;
++    }
++    ui::ColorProvider provider;
++    provider.AddMixer()[kColorToolbar] = {SK_ColorGREEN};
++    AddColorMixer(&provider, key);
++    EXPECT_EQ(SK_ColorGREEN, provider.GetColor(kColorToolbar)) << scenario;
++  }
++}
++
++}  // namespace
++}  // namespace zenkai_clay
+--- /dev/null
++++ b/chrome/browser/ui/color/zenkai_clay_theme.h
+@@ -0,0 +1,33 @@
++// Copyright 2026 The Helium Authors
++// You can use, redistribute, and/or modify this source code under
++// the terms of the GPL-3.0 license that can be found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_UI_COLOR_ZENKAI_CLAY_THEME_H_
++#define CHROME_BROWSER_UI_COLOR_ZENKAI_CLAY_THEME_H_
++
++#include "third_party/skia/include/core/SkColor.h"
++
++namespace ui {
++class ColorProvider;
++struct ColorProviderKey;
++}  // namespace ui
++
++namespace zenkai_clay {
++
++inline constexpr char kName[] = "Zenkai Clay";
++inline constexpr SkColor kAccent = SkColorSetRGB(0xD9, 0x77, 0x57);
++inline constexpr SkColor kBackground = SkColorSetRGB(0x0C, 0x0C, 0x0C);
++inline constexpr SkColor kFrame = SkColorSetRGB(0x18, 0x18, 0x18);
++inline constexpr SkColor kToolbar = SkColorSetRGB(0x25, 0x25, 0x25);
++inline constexpr SkColor kOmnibox = SkColorSetRGB(0x35, 0x35, 0x35);
++inline constexpr SkColor kText = SkColorSetRGB(0xEF, 0xEF, 0xEF);
++inline constexpr SkColor kSecondaryText = SkColorSetRGB(0xD6, 0xD6, 0xD6);
++inline constexpr SkColor kInactiveText = SkColorSetRGB(0xBD, 0xBD, 0xBD);
++inline constexpr SkColor kSelection = SkColorSetRGB(0x55, 0x33, 0x27);
++
++void AddColorMixer(ui::ColorProvider* provider,
++                   const ui::ColorProviderKey& key);
++
++}  // namespace zenkai_clay
++
++#endif  // CHROME_BROWSER_UI_COLOR_ZENKAI_CLAY_THEME_H_
+--- a/chrome/browser/ui/webui/cr_components/theme_color_picker/theme_color_picker_handler.cc
++++ b/chrome/browser/ui/webui/cr_components/theme_color_picker/theme_color_picker_handler.cc
+@@ -12,6 +12,7 @@
+ #include "chrome/browser/themes/theme_service.h"
+ #include "chrome/browser/themes/theme_service_factory.h"
+ #include "chrome/browser/ui/color/chrome_color_id.h"
++#include "chrome/browser/ui/color/zenkai_clay_theme.h"
+ #include "chrome/browser/ui/webui/cr_components/theme_color_picker/customize_chrome_colors.h"
+ #include "chrome/common/pref_names.h"
+ #include "chrome/common/themes/autogenerated_theme_util.h"
+@@ -107,6 +108,11 @@
+ void ThemeColorPickerHandler::SetSeedColor(
+     SkColor seed_color,
+     ui::mojom::BrowserColorVariant variant) {
++  if (seed_color == zenkai_clay::kAccent &&
++      variant == ui::mojom::BrowserColorVariant::kNeutral) {
++    theme_service_->SetBrowserColorScheme(
++        ThemeService::BrowserColorScheme::kDark);
++  }
+   theme_service_->SetUserColorAndBrowserColorVariant(seed_color, variant);
+   theme_service_->UseDeviceTheme(false);
+   MaybeIncrementSeedColorChangeCount();
+@@ -123,6 +129,15 @@
+   for (const auto& color_info : kDynamicCustomizeChromeColors) {
+     colors.push_back(CreateDynamicChromeColor(color_info, is_dark_mode));
+   }
++  // A named dark preset with an exact preview, independent of OS appearance.
++  auto clay = theme_color_picker::mojom::ChromeColor::New();
++  clay->name = zenkai_clay::kName;
++  clay->seed = zenkai_clay::kAccent;
++  clay->background = zenkai_clay::kFrame;
++  clay->foreground = zenkai_clay::kAccent;
++  clay->base = zenkai_clay::kToolbar;
++  clay->variant = ui::mojom::BrowserColorVariant::kNeutral;
++  colors.push_back(std::move(clay));
+   std::move(callback).Run(std::move(colors));
+ }
+ 
+--- a/chrome/browser/ui/webui/cr_components/theme_color_picker/theme_color_picker_handler_unittest.cc
++++ b/chrome/browser/ui/webui/cr_components/theme_color_picker/theme_color_picker_handler_unittest.cc
+@@ -18,6 +18,7 @@
+ #include "chrome/browser/themes/theme_service.h"
+ #include "chrome/browser/themes/theme_service_factory.h"
+ #include "chrome/browser/ui/color/chrome_color_id.h"
++#include "chrome/browser/ui/color/zenkai_clay_theme.h"
+ #include "chrome/browser/ui/webui/cr_components/theme_color_picker/customize_chrome_colors.h"
+ #include "chrome/common/themes/autogenerated_theme_util.h"
+ #include "chrome/test/base/testing_profile.h"
+@@ -105,6 +106,7 @@
+   MOCK_CONST_METHOD0(GetAutogeneratedThemeColor, SkColor());
+   MOCK_CONST_METHOD0(GetBrowserColorScheme, ThemeService::BrowserColorScheme());
+   MOCK_METHOD(void, SetUserColor, (std::optional<SkColor>));
++  MOCK_METHOD(void, SetBrowserColorScheme, (ThemeService::BrowserColorScheme));
+   MOCK_CONST_METHOD0(GetUserColor, std::optional<SkColor>());
+   MOCK_CONST_METHOD0(UsingDeviceTheme, bool());
+   MOCK_CONST_METHOD0(GetBrowserColorVariant, ui::mojom::BrowserColorVariant());
+@@ -187,7 +189,7 @@
+   // Test with Dark Mode on.
+   handler().GetChromeColors(true, callback.Get());
+ 
+-  ASSERT_EQ(kDynamicCustomizeChromeColors.size(), colors.size());
++  ASSERT_EQ(kDynamicCustomizeChromeColors.size() + 1, colors.size());
+   for (size_t i = 0; i < kDynamicCustomizeChromeColors.size(); i++) {
+     auto palette = ui::GeneratePalette(
+         kDynamicCustomizeChromeColors[i].color,
+@@ -204,7 +206,7 @@
+   // Test with Dark Mode off.
+   handler().GetChromeColors(false, callback.Get());
+ 
+-  ASSERT_EQ(kDynamicCustomizeChromeColors.size(), colors.size());
++  ASSERT_EQ(kDynamicCustomizeChromeColors.size() + 1, colors.size());
+   for (size_t i = 0; i < kDynamicCustomizeChromeColors.size(); i++) {
+     auto palette = ui::GeneratePalette(
+         kDynamicCustomizeChromeColors[i].color,
+@@ -216,6 +218,24 @@
+     EXPECT_EQ(palette->primary().get(40), colors[i]->background);
+     EXPECT_EQ(palette->primary().get(90), colors[i]->foreground);
+     EXPECT_EQ(palette->primary().get(80), colors[i]->base);
++  }
++}
++
++TEST_F(ThemeColorPickerHandlerTest, ZenkaiClayPreviewMatchesInBothModes) {
++  for (bool dark_mode : {false, true}) {
++    std::vector<theme_color_picker::mojom::ChromeColorPtr> colors;
++    base::MockCallback<ThemeColorPickerHandler::GetChromeColorsCallback>
++        callback;
++    EXPECT_CALL(callback, Run(_)).WillOnce(MoveArg(&colors));
++    handler().GetChromeColors(dark_mode, callback.Get());
++    ASSERT_FALSE(colors.empty());
++    const auto& clay = colors.back();
++    EXPECT_EQ("Zenkai Clay", clay->name);
++    EXPECT_EQ(zenkai_clay::kAccent, clay->seed);
++    EXPECT_EQ(zenkai_clay::kFrame, clay->background);
++    EXPECT_EQ(zenkai_clay::kAccent, clay->foreground);
++    EXPECT_EQ(zenkai_clay::kToolbar, clay->base);
++    EXPECT_EQ(ui::mojom::BrowserColorVariant::kNeutral, clay->variant);
+   }
+ }
+ 
+@@ -518,6 +538,24 @@
+   EXPECT_EQ(ui::mojom::BrowserColorVariant::kTonalSpot, variant);
+ }
+ 
++TEST_F(ThemeColorPickerHandlerTest, ZenkaiClaySelectsDarkMode) {
++  EXPECT_CALL(mock_theme_service(),
++              SetBrowserColorScheme(ThemeService::BrowserColorScheme::kDark));
++  EXPECT_CALL(
++      mock_theme_service(),
++      SetUserColorAndBrowserColorVariant(
++          zenkai_clay::kAccent, ui::mojom::BrowserColorVariant::kNeutral));
++  EXPECT_CALL(mock_theme_service(), UseDeviceTheme(false));
++  handler().SetSeedColor(zenkai_clay::kAccent,
++                         ui::mojom::BrowserColorVariant::kNeutral);
++}
++
++TEST_F(ThemeColorPickerHandlerTest, CustomClayAccentKeepsColorScheme) {
++  EXPECT_CALL(mock_theme_service(), SetBrowserColorScheme(_)).Times(0);
++  handler().SetSeedColor(zenkai_clay::kAccent,
++                         ui::mojom::BrowserColorVariant::kTonalSpot);
++}
++
+ TEST_F(ThemeColorPickerHandlerTest, RemoveBackgroundImage) {
+   EXPECT_CALL(mock_ntp_custom_background_service_, ResetCustomBackgroundInfo)
+       .Times(1);
